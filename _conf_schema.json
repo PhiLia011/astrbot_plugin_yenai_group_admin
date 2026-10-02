@@ -1,0 +1,140 @@
+{
+  "enabled": {
+    "description": "插件总开关",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后本插件不响应任何命令，也不做违禁词/黑名单自动处理"
+  },
+  "master_qq": {
+    "description": "额外的主人QQ（可跨群操作）",
+    "type": "list",
+    "default": [],
+    "hint": "AstrBot 全局管理员中的纯数字QQ会自动视为主人，这里可以再补充；主人不会被禁言/踢出"
+  },
+  "white_qq": {
+    "description": "群管白名单QQ",
+    "type": "list",
+    "default": [],
+    "hint": "白名单成员不会被禁言/踢出，开启“白名单自动解禁”后还会自动解禁"
+  },
+  "black_qq": {
+    "description": "群管黑名单QQ",
+    "type": "list",
+    "default": [],
+    "hint": "黑名单用户群内发言即踢出、入群申请自动拒绝；-踢黑 会把目标加入这里"
+  },
+  "group_white_list": {
+    "description": "生效群白名单（留空=全部群生效）",
+    "type": "list",
+    "default": [],
+    "hint": "仅列表内的群响应群管命令与自动处理"
+  },
+  "group_black_list": {
+    "description": "生效群黑名单（优先于白名单）",
+    "type": "list",
+    "default": [],
+    "hint": "列表内的群完全禁用本插件"
+  },
+  "auto_unban_white": {
+    "description": "白名单自动解禁",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后白名单成员被别人禁言时自动解禁（-开启白名单自动解禁 也可切换）"
+  },
+  "default_mute_seconds": {
+    "description": "默认禁言时长（秒）",
+    "type": "int",
+    "default": 300,
+    "hint": "禁言命令未写时长时使用，默认 300 秒"
+  },
+  "max_mute_seconds": {
+    "description": "禁言时长上限（秒）",
+    "type": "int",
+    "default": 2592000,
+    "hint": "OneBot 上限为 30 天（2592000 秒），超出会被截断"
+  },
+  "list_forward": {
+    "description": "列表类结果使用合并转发",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后禁言列表/排行榜/违禁词列表改用纯文本发送"
+  },
+  "vote_ban_enabled": {
+    "description": "投票禁言功能",
+    "type": "bool",
+    "default": true
+  },
+  "vote_kick_enabled": {
+    "description": "投票踢人功能",
+    "type": "bool",
+    "default": false
+  },
+  "vote_out_time": {
+    "description": "投票超时时间（秒）",
+    "type": "int",
+    "default": 180
+  },
+  "vote_min_num": {
+    "description": "投票成功最低票数",
+    "type": "int",
+    "default": 4
+  },
+  "vote_ban_time": {
+    "description": "投票成功后禁言时长（秒）",
+    "type": "int",
+    "default": 3600
+  },
+  "vote_veto": {
+    "description": "管理员一票否决",
+    "type": "bool",
+    "default": true
+  },
+  "vote_admin": {
+    "description": "允许投票禁言/踢出管理员（Bot 为群主时）",
+    "type": "bool",
+    "default": false
+  },
+  "verify_mode": {
+    "description": "验证模式",
+    "type": "string",
+    "default": "精确",
+    "options": ["精确", "模糊"],
+    "hint": "精确=答案必须完全一致；模糊=消息包含答案即可"
+  },
+  "verify_times": {
+    "description": "最多允许尝试次数",
+    "type": "int",
+    "default": 7
+  },
+  "verify_time": {
+    "description": "验证超时时间（秒）",
+    "type": "int",
+    "default": 300
+  },
+  "verify_remind_last_minute": {
+    "description": "最后一分钟提醒",
+    "type": "bool",
+    "default": true,
+    "hint": "仅在超时时长大于等于 120 秒时生效"
+  },
+  "verify_range_min": {
+    "description": "验证算式数字下限",
+    "type": "int",
+    "default": 10
+  },
+  "verify_range_max": {
+    "description": "验证算式数字上限",
+    "type": "int",
+    "default": 100
+  },
+  "verify_delay": {
+    "description": "入群后延迟发送验证信息（秒）",
+    "type": "int",
+    "default": 2
+  },
+  "verify_success_msg": {
+    "description": "验证成功提示（可被分群覆盖）",
+    "type": "text",
+    "default": "✅ 验证成功，欢迎入群"
+  }
+}

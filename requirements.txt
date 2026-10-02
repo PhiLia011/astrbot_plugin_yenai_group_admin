@@ -1,0 +1,1 @@
+# 无需额外依赖：定时任务使用 AstrBot 自带的 apscheduler
