@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import random
+import string
 from dataclasses import dataclass
 
 OPERATORS = ("+", "-")
@@ -12,6 +13,7 @@ OPERATORS = ("+", "-")
 @dataclass
 class VerifySession:
     remain: int
+    kind: str  # "math" 算式 / "letter" 字母验证码
     m: int
     n: int
     operator: str
@@ -21,6 +23,8 @@ class VerifySession:
 
     @property
     def question(self) -> str:
+        if self.kind == "letter":
+            return self.code
         return f"{self.m} {self.operator} {self.n}"
 
 
@@ -44,7 +48,20 @@ class VerifyManager:
         times: int,
         range_min: int,
         range_max: int,
+        kind: str = "math",
     ) -> VerifySession:
+        if kind == "letter":
+            code = "".join(random.choices(string.ascii_letters, k=5))
+            session = VerifySession(
+                remain=int(times),
+                kind="letter",
+                m=0,
+                n=0,
+                operator="",
+                code=code,
+            )
+            self.sessions[self.key(group_id, user_id)] = session
+            return session
         operator = random.choice(OPERATORS)
         low, high = int(range_min), int(range_max)
         if high < low:
@@ -58,6 +75,7 @@ class VerifyManager:
         code = str(m - n) if operator == "-" else str(m + n)
         session = VerifySession(
             remain=int(times),
+            kind="math",
             m=m,
             n=n,
             operator=operator,

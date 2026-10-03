@@ -161,6 +161,13 @@ class OneBot:
     async def recall(self, message_id: str) -> None:
         await self.call("delete_msg", message_id=int(message_id))
 
+    async def send_private(self, user_id: str, message: str) -> None:
+        await self.call(
+            "send_private_msg",
+            user_id=int(user_id),
+            message=message,
+        )
+
     async def set_essence(self, message_id: str) -> None:
         await self.try_call(("set_essence_msg", "_set_essence_msg"), message_id=int(message_id))
 
