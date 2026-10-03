@@ -599,6 +599,15 @@ class YenaiGroupAdminPlugin(Star):
 
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
+    @filter.regex(r"^切换验证类型")
+    async def cmd_verify_type(self, event: AstrMessageEvent):
+        """切换验证类型：算式 / 字母验证码。"""
+        if not self.wake_ok(event):
+            return
+        await extra.cmd_verify_type(self, event)
+
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     @filter.regex(r"^设置验证超时时间")
     async def cmd_verify_time(self, event: AstrMessageEvent):
         """设置验证超时时间。"""

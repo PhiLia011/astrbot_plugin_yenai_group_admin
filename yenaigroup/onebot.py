@@ -161,13 +161,6 @@ class OneBot:
     async def recall(self, message_id: str) -> None:
         await self.call("delete_msg", message_id=int(message_id))
 
-    async def send_private(self, user_id: str, message: str) -> None:
-        await self.call(
-            "send_private_msg",
-            user_id=int(user_id),
-            message=message,
-        )
-
     async def set_essence(self, message_id: str) -> None:
         await self.try_call(("set_essence_msg", "_set_essence_msg"), message_id=int(message_id))
 
@@ -214,6 +207,23 @@ class OneBot:
         if not approve and reason:
             params["reason"] = reason
         await self.call("set_group_add_request", **params)
+
+    # ---------------- 消息发送 ----------------
+
+    async def send_private(self, user_id: str, message: str, group_id: str | None = None) -> None:
+        """私聊发送消息。
+
+        传入 group_id 时使用「群临时会话」发送，非好友也能送达
+        （NapCat / go-cqhttp / LLOneBot 等协议端的 send_private_msg 扩展参数）。
+        参数非法时统一抛 OneBotError，方便调用方做回退。
+        """
+        try:
+            params: dict[str, Any] = {"user_id": int(user_id), "message": message}
+            if group_id:
+                params["group_id"] = int(group_id)
+        except (TypeError, ValueError) as e:
+            raise OneBotError(f"私聊目标无效：{user_id}") from e
+        await self.call("send_private_msg", **params)
 
     async def send_forward(self, group_id: str, nodes: list[dict]) -> None:
         await self.call(

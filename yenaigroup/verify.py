@@ -8,6 +8,9 @@ import string
 from dataclasses import dataclass
 
 OPERATORS = ("+", "-")
+# 字母验证码字符集：去掉 l/I、o/O 等肉眼易混的字母，减少用户看错
+LETTER_CHARS = "".join(c for c in string.ascii_letters if c not in "lIoO")
+LETTER_LENGTH = 5
 
 
 @dataclass
@@ -51,7 +54,7 @@ class VerifyManager:
         kind: str = "math",
     ) -> VerifySession:
         if kind == "letter":
-            code = "".join(random.choices(string.ascii_letters, k=5))
+            code = "".join(random.choices(LETTER_CHARS, k=LETTER_LENGTH))
             session = VerifySession(
                 remain=int(times),
                 kind="letter",
@@ -89,10 +92,15 @@ class VerifyManager:
         if session is None:
             return False, None
         text = (message or "").strip()
+        target = session.code
+        if session.kind == "letter":
+            # 字母验证码不区分大小写：输入法容易自动首字母大写，
+            # 严格区分大小写会白白消耗用户的失败次数
+            text, target = text.lower(), target.lower()
         if mode == "精确":
-            ok = text == session.code
+            ok = text == target
         else:
-            ok = session.code in text
+            ok = target in text
         return ok, session
 
     def consume_failure(self, group_id: str, user_id: str) -> int:

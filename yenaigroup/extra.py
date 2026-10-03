@@ -50,7 +50,7 @@ HELP_TEXT = """椰奶群管 · 指令一览（全局触发词 -）
 -启用投票禁言 / -禁用投票踢人 / -投票设置超时时间 180
 
 【入群验证】
--开启验证 / -关闭验证 / -切换验证模式 / -设置验证超时时间 300
+-开启验证 / -关闭验证 / -切换验证模式 / -切换验证类型 / -设置验证超时时间 300
 -重新验证 @某人 / -绕过验证 @某人 / -重新验证从未发言的人
 
 【群公告与通知】
@@ -363,6 +363,25 @@ async def cmd_verify_mode(plugin, event):
     data["verifyMode"] = value
     await plugin.store.save(group_id)
     await reply_plain(event, f"✅ 已切换验证模式为{value}验证")
+
+
+async def cmd_verify_type(plugin, event):
+    if not await plugin.perm.check(event, "master"):
+        return
+    from .events import verify_type
+
+    group_id, data = _group_of(event, plugin)
+    current = verify_type(plugin, group_id)
+    value = "字母验证码" if current == "算式" else "算式"
+    data["verifyType"] = value
+    await plugin.store.save(group_id)
+    if value == "字母验证码":
+        await reply_plain(
+            event,
+            "✅ 已切换验证类型为字母验证码\n验证码将私聊下发，发送失败时自动回退算式验证",
+        )
+    else:
+        await reply_plain(event, "✅ 已切换验证类型为算式验证")
 
 
 async def cmd_verify_time(plugin, event):
