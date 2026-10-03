@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import random
+import string
 from dataclasses import dataclass
 
 OPERATORS = ("+", "-")
+# 字母验证码字符集：去掉 l/I、o/O 等肉眼易混的字母，减少用户看错
+LETTER_CHARS = "".join(c for c in string.ascii_letters if c not in "lIoO")
+LETTER_LENGTH = 5
 
 
 @dataclass
 class VerifySession:
     remain: int
+    kind: str  # "math" 算式 / "letter" 字母验证码
     m: int
     n: int
     operator: str
@@ -21,6 +26,8 @@ class VerifySession:
 
     @property
     def question(self) -> str:
+        if self.kind == "letter":
+            return self.code
         return f"{self.m} {self.operator} {self.n}"
 
 
@@ -44,7 +51,20 @@ class VerifyManager:
         times: int,
         range_min: int,
         range_max: int,
+        kind: str = "math",
     ) -> VerifySession:
+        if kind == "letter":
+            code = "".join(random.choices(LETTER_CHARS, k=LETTER_LENGTH))
+            session = VerifySession(
+                remain=int(times),
+                kind="letter",
+                m=0,
+                n=0,
+                operator="",
+                code=code,
+            )
+            self.sessions[self.key(group_id, user_id)] = session
+            return session
         operator = random.choice(OPERATORS)
         low, high = int(range_min), int(range_max)
         if high < low:
@@ -58,6 +78,7 @@ class VerifyManager:
         code = str(m - n) if operator == "-" else str(m + n)
         session = VerifySession(
             remain=int(times),
+            kind="math",
             m=m,
             n=n,
             operator=operator,
@@ -71,10 +92,15 @@ class VerifyManager:
         if session is None:
             return False, None
         text = (message or "").strip()
+        target = session.code
+        if session.kind == "letter":
+            # 字母验证码不区分大小写：输入法容易自动首字母大写，
+            # 严格区分大小写会白白消耗用户的失败次数
+            text, target = text.lower(), target.lower()
         if mode == "精确":
-            ok = text == session.code
+            ok = text == target
         else:
-            ok = session.code in text
+            ok = target in text
         return ok, session
 
     def consume_failure(self, group_id: str, user_id: str) -> int:

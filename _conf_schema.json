@@ -94,6 +94,13 @@
     "type": "bool",
     "default": false
   },
+  "verify_type": {
+    "description": "验证题目类型",
+    "type": "string",
+    "default": "算式",
+    "options": ["算式", "字母验证码"],
+    "hint": "字母验证码=私聊下发 5 位随机字母，用户在群内回复完成验证（不区分大小写）；私聊发送失败时自动回退为算式。可被群内「-切换验证类型」按群覆盖"
+  },
   "verify_mode": {
     "description": "验证模式",
     "type": "string",

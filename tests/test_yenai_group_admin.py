@@ -34,7 +34,11 @@ from astrbot_plugin_yenai_group_admin.yenaigroup.utils import (  # noqa: E402
     translate_china_num,
     unit_multiplier,
 )
-from astrbot_plugin_yenai_group_admin.yenaigroup.verify import VerifyManager  # noqa: E402
+from astrbot_plugin_yenai_group_admin.yenaigroup.verify import (  # noqa: E402
+    LETTER_CHARS,
+    LETTER_LENGTH,
+    VerifyManager,
+)
 from astrbot_plugin_yenai_group_admin.yenaigroup.vote import VoteManager  # noqa: E402
 
 
@@ -272,6 +276,43 @@ def test_verify_range_normalized():
     session = manager.create("1", "2", 1, 100, 10)  # 范围写反也要能用
     assert 10 <= session.m <= 100
     assert 10 <= session.n <= 100
+
+
+def test_verify_letter_code_charset():
+    assert LETTER_LENGTH == 5
+    # 不算字母 l/I、o/O，避免用户看错
+    assert not set("lIoO") & set(LETTER_CHARS)
+    assert len(LETTER_CHARS) == 48
+    manager = VerifyManager()
+    codes = [manager.create("1", "2", 1, 10, 20, kind="letter").code for _ in range(200)]
+    assert all(len(code) == LETTER_LENGTH for code in codes)
+    assert all(set(code) <= set(LETTER_CHARS) for code in codes)
+
+
+def test_verify_letter_code_matching():
+    manager = VerifyManager()
+    session = manager.create("1", "2", 3, 10, 20, kind="letter")
+    assert session.kind == "letter"
+    assert session.question == session.code
+    # 字母验证码不区分大小写（用户输入法容易自动大写）
+    assert manager.check("1", "2", session.code, "精确")[0] is True
+    assert manager.check("1", "2", session.code.upper(), "精确")[0] is True
+    assert manager.check("1", "2", session.code.lower(), "精确")[0] is True
+    assert manager.check("1", "2", f" {session.code} ", "精确")[0] is True
+    assert manager.check("1", "2", f"答案是{session.code}吧", "精确")[0] is False
+    assert manager.check("1", "2", f"答案是{session.code.upper()}吧", "模糊")[0] is True
+    assert manager.check("1", "2", "AB", "精确")[0] is False
+    assert manager.drop("1", "2") is session
+    assert manager.find("1", "2") is None
+
+
+def test_verify_math_kind_unchanged():
+    # 新增 kind 字段后算式模式的默认行为必须保持不变
+    manager = VerifyManager()
+    session = manager.create("1", "2", 3, 10, 20)
+    assert session.kind == "math"
+    assert session.question == f"{session.m} {session.operator} {session.n}"
+    assert manager.check("1", "2", session.code, "精确")[0] is True
 
 
 if __name__ == "__main__":
