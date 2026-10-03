@@ -25,6 +25,10 @@ _astrbot_app_path = os.environ.get("ASTRBOT_APP_PATH", "").strip()
 if _astrbot_app_path and Path(_astrbot_app_path).is_dir():
     sys.path.insert(0, _astrbot_app_path)
 
+# 导入 astrbot 时会按 ASTRBOT_ROOT（未设置则取当前工作目录）初始化 data/ 等目录，
+# 默认指向临时目录，免得把 data/ 建在插件目录里污染仓库
+os.environ.setdefault("ASTRBOT_ROOT", tempfile.mkdtemp(prefix="astrbot-test-root-"))
+
 from astrbot_plugin_yenai_group_admin.yenaigroup.admin import parse_mute_args  # noqa: E402
 from astrbot_plugin_yenai_group_admin.yenaigroup.bannedwords import (  # noqa: E402
     BannedWords,
