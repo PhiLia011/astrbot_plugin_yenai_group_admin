@@ -67,17 +67,17 @@
   "vote_kick_enabled": {
     "description": "投票踢人功能",
     "type": "bool",
-    "default": false
+    "default": true
   },
   "vote_out_time": {
     "description": "投票超时时间（秒）",
     "type": "int",
-    "default": 180
+    "default": 600
   },
   "vote_min_num": {
     "description": "投票成功最低票数",
     "type": "int",
-    "default": 4
+    "default": 5
   },
   "vote_ban_time": {
     "description": "投票成功后禁言时长（秒）",
@@ -97,26 +97,26 @@
   "verify_type": {
     "description": "验证题目类型",
     "type": "string",
-    "default": "算式",
+    "default": "字母验证码",
     "options": ["算式", "字母验证码"],
     "hint": "字母验证码=私聊下发 5 位随机字母，用户在群内回复完成验证（不区分大小写）；私聊发送失败时自动回退为算式。可被群内「-切换验证类型」按群覆盖"
   },
   "verify_mode": {
     "description": "验证模式",
     "type": "string",
-    "default": "精确",
+    "default": "模糊",
     "options": ["精确", "模糊"],
     "hint": "精确=答案必须完全一致；模糊=消息包含答案即可"
   },
   "verify_times": {
     "description": "最多允许尝试次数",
     "type": "int",
-    "default": 7
+    "default": 3
   },
   "verify_time": {
     "description": "验证超时时间（秒）",
     "type": "int",
-    "default": 300
+    "default": 600
   },
   "verify_remind_last_minute": {
     "description": "最后一分钟提醒",
@@ -127,17 +127,17 @@
   "verify_range_min": {
     "description": "验证算式数字下限",
     "type": "int",
-    "default": 10
+    "default": 0
   },
   "verify_range_max": {
     "description": "验证算式数字上限",
     "type": "int",
-    "default": 100
+    "default": 1000
   },
   "verify_delay": {
     "description": "入群后延迟发送验证信息（秒）",
     "type": "int",
-    "default": 2
+    "default": 3
   },
   "verify_success_msg": {
     "description": "验证成功提示（可被分群覆盖）",

@@ -1,5 +1,16 @@
 # 更新日志
 
+## v1.1.1
+
+### 变更
+
+- 把 `_conf_schema.json` 的各项默认值调整为当前实际使用中的配置，新装/重置配置后即为该套参数：
+  - `verify_type` 默认改为「字母验证码」，`verify_mode` 默认改为「模糊」
+  - `verify_times` 7 → 3，`verify_time` 300 → 600，`verify_delay` 2 → 3
+  - `verify_range_min` 10 → 0，`verify_range_max` 100 → 1000
+  - `vote_kick_enabled` 默认开启，`vote_out_time` 180 → 600，`vote_min_num` 4 → 5
+- 已装载的配置不会被改写，仅影响未设置过的键与新安装。
+
 ## v1.1.0
 
 ### 新增
