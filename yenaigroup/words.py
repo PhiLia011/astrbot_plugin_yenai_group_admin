@@ -152,14 +152,12 @@ async def cmd_list(plugin, event):
     if not table:
         await reply_plain(event, "❎ 没有违禁词")
         return
-    text = clean_at_tokens(raw_text(event))
-    raw_mode = "原始" in text or "raw" in text
     items = []
     for word, item in table.items():
         items.append(
             [
                 text_seg("屏蔽词："),
-                text_seg(word if raw_mode else str(word)),
+                text_seg(word),
                 text_seg(f"\n匹配模式：{MATCH_TYPE_MAP.get(item.get('matchType'), '未知')}\n"),
                 text_seg(f"处理方式：{PENALTY_TYPE_MAP.get(item.get('penaltyType'), '未知')}\n"),
                 text_seg(f"添加人：{item.get('addedBy') or '未知'}\n"),

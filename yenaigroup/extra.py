@@ -104,7 +104,9 @@ async def cmd_toggle_no_ban(plugin, event):
     if not current and not enable:
         await reply_plain(event, "❎ 白名单自动解禁已处于关闭状态")
         return
-    plugin.set_conf("auto_unban_white", enable)
+    if not plugin.set_conf("auto_unban_white", enable):
+        await reply_plain(event, "❎ 配置保存失败，请查看 AstrBot 日志")
+        return
     await reply_plain(event, f"✅ 已{'开启' if enable else '关闭'}白名单自动解禁")
 
 
@@ -299,7 +301,9 @@ async def cmd_vote_switch(plugin, event):
     if not current and not enable:
         await reply_plain(event, f"❎ 投票{name}功能已处于禁用状态")
         return
-    plugin.set_conf(key, enable)
+    if not plugin.set_conf(key, enable):
+        await reply_plain(event, "❎ 配置保存失败，请查看 AstrBot 日志")
+        return
     await reply_plain(event, f"✅ 已{'启用' if enable else '禁用'}投票{name}功能")
 
 
@@ -326,7 +330,9 @@ async def cmd_vote_settings(plugin, event):
     if int(plugin.conf(key, 0)) == value:
         await reply_plain(event, f"❎ 当前{name}已经是{value}了")
         return
-    plugin.set_conf(key, value)
+    if not plugin.set_conf(key, value):
+        await reply_plain(event, "❎ 配置保存失败，请查看 AstrBot 日志")
+        return
     await reply_plain(event, f"✅ 已把{name}设置成{value}了")
 
 

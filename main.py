@@ -32,7 +32,7 @@ from .yenaigroup.vote import VoteManager
 PLUGIN_NAME = "astrbot_plugin_yenai_group_admin"
 AUTHOR = "Firefly"
 DESC = "椰奶群管：禁言/踢人/违禁词/黑白名单/投票/入群验证/群公告/定时禁言等全套群管功能"
-VERSION = "v1.0.0"
+VERSION = "v1.1.0"
 REPO = "https://github.com/PhiLia011/astrbot_plugin_yenai_group_admin"
 
 PENDING_TTL = 180
@@ -44,7 +44,9 @@ class YenaiGroupAdminPlugin(Star):
 
     def __init__(self, context: Context, config=None):
         super().__init__(context)
-        self.config = config or {}
+        # 注意不能写 config or {}：AstrBotConfig 为空时是 falsy，
+        # 那样会把配置对象换成普通 dict，丢掉 save_config() 导致设置静默丢失
+        self.config = config if config is not None else {}
         self.data_dir = Path(StarTools.get_data_dir())
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.store = GroupStore(self.data_dir)
@@ -80,27 +82,38 @@ class YenaiGroupAdminPlugin(Star):
             value = default
         return default if value is None else value
 
-    def set_conf(self, key: str, value) -> None:
+    def set_conf(self, key: str, value) -> bool:
+        """写入插件配置并落盘；返回是否真的保存成功，供调用方判断。"""
         self.config[key] = value
+        saver = getattr(self.config, "save_config", None)
+        if not callable(saver):
+            logger.error(
+                "[yenai群管] 插件配置不可保存（_conf_schema.json 未加载？），"
+                "本次设置「%s」仅在内存生效，重启后会丢失",
+                key,
+            )
+            return False
         try:
-            self.config.save_config()
+            saver()
         except Exception as e:  # noqa: BLE001
-            logger.warning("[yenai群管] 保存插件配置失败：%s", e)
+            logger.error("[yenai群管] 保存插件配置失败：%s", e)
+            return False
+        return True
 
     def qq_list(self, key: str) -> list[str]:
         return [str(i).strip() for i in (self.conf(key, []) or []) if str(i).strip()]
 
-    def add_to_list(self, key: str, ids: list[str]) -> None:
+    def add_to_list(self, key: str, ids: list[str]) -> bool:
         current = self.qq_list(key)
         for item in ids:
             text = str(item).strip()
             if text and text not in current:
                 current.append(text)
-        self.set_conf(key, current)
+        return self.set_conf(key, current)
 
-    def remove_from_list(self, key: str, ids: list[str]) -> None:
+    def remove_from_list(self, key: str, ids: list[str]) -> bool:
         drop = {str(i).strip() for i in ids}
-        self.set_conf(key, [i for i in self.qq_list(key) if i not in drop])
+        return self.set_conf(key, [i for i in self.qq_list(key) if i not in drop])
 
     def spawn(self, coro) -> asyncio.Task:
         task = asyncio.ensure_future(coro)
@@ -740,4 +753,7 @@ class YenaiGroupAdminPlugin(Star):
         if getattr(event, "_has_send_oper", False):
             return
         await events.handle_blacklist_message(self, event)
+        # 黑名单踢人已经处理过这条消息时不再叠加违禁词处罚
+        if getattr(event, "_has_send_oper", False):
+            return
         await words.handle_auto_punish(self, event)

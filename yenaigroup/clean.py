@@ -112,7 +112,7 @@ async def cmd_never_speak(plugin, event):
     found = re.search(rf"第({NUM_REG})页", text)
     page = plugin.to_int(found.group(1) if found else 1, 1)
     pages = chunked(targets, PAGE_SIZE)
-    if page > len(pages):
+    if page < 1 or page > len(pages):
         await reply_plain(event, "哪有那么多人辣o(´^｀)o")
         return
     current = pages[page - 1]
@@ -175,7 +175,7 @@ async def cmd_noactive(plugin, event):
         return
 
     pages = chunked(targets, PAGE_SIZE)
-    if page > len(pages):
+    if page < 1 or page > len(pages):
         await reply_plain(event, "❎ 页数超过最大值")
         return
     current = pages[page - 1]

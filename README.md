@@ -34,6 +34,10 @@
 
 把整个目录放到 `AstrBot/data/plugins/astrbot_plugin_yenai_group_admin/` 后重载插件。
 
+> ⚠️ 本插件的所有指令都按全局触发词 `-` 编写（例如 `-禁言 @某人 10分`）。
+> 如果你的 AstrBot 仍是默认触发词 `/`，需要先把全局配置的 `wake_prefix` 改成 `-`
+> （或改成同时包含 `-`），否则所有指令都不会被匹配到。
+
 ## 数据
 
 - 每群配置：`data/plugin_data/astrbot_plugin_yenai_group_admin/groups/<群号>.json`
