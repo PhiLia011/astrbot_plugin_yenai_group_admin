@@ -2,17 +2,28 @@
 r"""椰奶群管的纯逻辑单元测试。
 
 运行方式（使用 AstrBot 自带 Python）：
-    set PYTHONPATH=F:\AstrBot\backend\app
+    # 1) 插件目录必须叫 astrbot_plugin_yenai_group_admin，把它的父目录加入 PYTHONPATH
+    # 2) 把 AstrBot 的 app 目录（里面是 astrbot/ 包）加入 PYTHONPATH
+    set PYTHONPATH=<插件所在目录的父目录>;<AstrBot 的 app 目录>
     python -m pytest tests -q      # 或直接 python tests/test_yenai_group_admin.py
+
+AstrBot 的 app 目录也可以用环境变量 ASTRBOT_APP_PATH 指定，免去手工拼 PYTHONPATH。
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from pathlib import Path
 
+# 插件目录（astrbot_plugin_yenai_group_admin）的父目录，使其可作为包被导入
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+# AstrBot 的 app 目录：优先环境变量，避免把某台机器的绝对路径写死在仓库里
+_astrbot_app_path = os.environ.get("ASTRBOT_APP_PATH", "").strip()
+if _astrbot_app_path and Path(_astrbot_app_path).is_dir():
+    sys.path.insert(0, _astrbot_app_path)
 
 from astrbot_plugin_yenai_group_admin.yenaigroup.admin import parse_mute_args  # noqa: E402
 from astrbot_plugin_yenai_group_admin.yenaigroup.bannedwords import (  # noqa: E402

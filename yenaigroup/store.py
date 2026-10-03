@@ -19,6 +19,7 @@ DEFAULT_GROUP_DATA: dict[str, Any] = {
     "TitleFilterModeChange": 0,
     "groupAddNotice": False,
     "verifyEnabled": False,
+    "verifyType": "",
     "verifyMode": "",
     "verifyTime": 0,
     "verifySuccessMsg": "",
