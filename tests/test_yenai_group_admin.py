@@ -334,13 +334,14 @@ class _FakeManageOneBot:
 
 
 class _FakeVerifyPlugin:
-    def __init__(self, config, groups=None):
+    def __init__(self, config, groups=None, data_dir=None):
         self.config = config
         self.store = _FakeStore(groups or {})
         self.perm = _FakePerm()
-        self.verify = VerifyManager()
+        self.verify = VerifyManager(data_dir)
         self.group_msgs = []
         self.tasks = []
+        self.kicked = []
 
     def conf(self, key, default=None):
         value = self.config.get(key, default)
@@ -353,6 +354,9 @@ class _FakeVerifyPlugin:
 
     async def send_group(self, event, text, at=None):
         self.group_msgs.append(text)
+
+    async def kick_member(self, group_id, user_id, reject_add_request=False):
+        self.kicked.append((group_id, user_id))
 
 
 class _FakeIncreaseEvent:
@@ -514,6 +518,75 @@ def test_verify_letter_code_matching():
         assert manager.check("1", "2", session.code.lower(), "精确")[0] is False
     assert manager.drop("1", "2") is session
     assert manager.find("1", "2") is None
+
+
+def test_verify_sessions_survive_reload():
+    """验证会话落盘；重载（新实例）后恢复并重新武装超时补踢。"""
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    async def run():
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 2,
+                    "verify_times": 3, "verify_remind_last_minute": False,
+                    "verify_range_min": 0, "verify_range_max": 1000}
+            # 1) 第一个实例发起验证
+            p1 = _FakeVerifyPlugin(conf, data_dir=tmp)
+            await events.start_verify(p1, object(), "1101242328", "3929993204")
+            session = p1.verify.find("1101242328", "3929993204")
+            assert session is not None and session.kind == "letter"
+            assert (Path(tmp) / "verify_sessions.json").exists()
+
+            # 2) 模拟重载：取消旧任务，丢掉旧实例
+            for task in p1.tasks:
+                task.cancel()
+            await asyncio.sleep(0)
+
+            # 3) 新实例恢复
+            p2 = _FakeVerifyPlugin(conf, data_dir=tmp)
+            await events.resume_verify_sessions(p2)
+            restored = p2.verify.find("1101242328", "3929993204")
+            assert restored is not None, "重载后验证会话必须恢复"
+            assert restored.code == session.code, "恢复后验证码应保持不变"
+            assert p2.kicked == []
+
+            # 4) 超时后应当补踢
+            await asyncio.sleep(2.4)
+            assert p2.kicked == [("1101242328", "3929993204")], p2.kicked
+            # 踢完要从会话里移除并落盘
+            assert p2.verify.find("1101242328", "3929993204") is None
+            assert p2.verify.load() == []
+
+    asyncio.run(run())
+
+
+def test_verify_resume_forgives_long_expired():
+    """过期太久的验证不再补踢，避免误伤早已正常发言的成员。"""
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    async def run():
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 10,
+                    "verify_times": 3, "verify_remind_last_minute": False,
+                    "verify_range_min": 0, "verify_range_max": 1000}
+            p1 = _FakeVerifyPlugin(conf, data_dir=tmp)
+            await events.start_verify(p1, object(), "1101242328", "3929993204")
+            for task in p1.tasks:
+                task.cancel()
+
+            p2 = _FakeVerifyPlugin(conf, data_dir=tmp)
+            await events.resume_verify_sessions(p2)
+            # 手动把 deadline 推到很久以前，再恢复一次
+            for record in p2.verify.load():
+                record.deadline = 0.0
+                p2.verify.adopt(record)
+            p2.verify.save()
+
+            p3 = _FakeVerifyPlugin(conf, data_dir=tmp)
+            await events.resume_verify_sessions(p3)
+            assert p3.kicked == [], "过期太久不应补踢"
+            assert p3.verify.find("1101242328", "3929993204") is None
+
+    asyncio.run(run())
 
 
 def test_verify_answer_strips_brackets_and_quotes():

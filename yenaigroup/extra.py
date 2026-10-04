@@ -510,6 +510,7 @@ async def cmd_verify_bypass(plugin, event):
     if session is None:
         await reply_plain(event, "❎ 目标群成员当前无需验证")
         return
+    plugin.verify.save()
     for task in (session.task, session.remind_task):
         if task is not None:
             task.cancel()

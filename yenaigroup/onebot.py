@@ -30,11 +30,16 @@ def get_client(event) -> Any | None:
 
 
 class OneBot:
-    """围绕事件对象的一层薄封装，所有群操作都走 OneBot call_action。"""
+    """围绕事件对象的一层薄封装，所有群操作都走 OneBot call_action。
 
-    def __init__(self, event):
+    没有事件对象时（例如插件重载后恢复的超时补踢）可以直接传 ``client``。
+    """
+
+    def __init__(self, event=None, client=None):
         self.event = event
-        self.client = get_client(event)
+        self.client = client if client is not None else (
+            get_client(event) if event is not None else None
+        )
 
     async def call(self, action: str, **params) -> Any:
         client = self.client or get_client(self.event)

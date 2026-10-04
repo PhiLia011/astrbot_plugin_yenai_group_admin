@@ -21,6 +21,7 @@ from astrbot.api.star import Context, Star, StarTools, register
 
 from .yenaigroup import admin, clean, events, extra, words
 from .yenaigroup.bannedwords import BannedWords
+from .yenaigroup.onebot import OneBot, OneBotError
 from .yenaigroup.permission import Permission
 from .yenaigroup.render import send_list as render_send_list
 from .yenaigroup.store import GroupStore
@@ -32,7 +33,7 @@ from .yenaigroup.vote import VoteManager
 PLUGIN_NAME = "astrbot_plugin_yenai_group_admin"
 AUTHOR = "Firefly"
 DESC = "椰奶群管：禁言/踢人/违禁词/黑白名单/投票/入群验证/群公告/定时禁言等全套群管功能"
-VERSION = "v1.2.3"
+VERSION = "v1.2.4"
 REPO = "https://github.com/PhiLia011/astrbot_plugin_yenai_group_admin"
 
 PENDING_TTL = 180
@@ -53,7 +54,7 @@ class YenaiGroupAdminPlugin(Star):
         self.banned = BannedWords(self.store, self)
         self.perm = Permission(self)
         self.votes = VoteManager()
-        self.verify = VerifyManager()
+        self.verify = VerifyManager(self.data_dir)
         self.tasks = MuteTaskScheduler(self)
         self.pending: dict[str, dict] = {}
         self._client = None
@@ -146,6 +147,22 @@ class YenaiGroupAdminPlugin(Star):
                     self._client = client
                     return client
         return None
+
+    async def kick_member(self, group_id: str, user_id: str, reject_add_request: bool = False) -> None:
+        """没有事件对象时的踢人（用于重载后恢复的超时补踢）。"""
+        client = await self.find_client()
+        if client is None:
+            raise OneBotError("未获取到 OneBot 客户端（请确认平台适配器为 aiocqhttp）")
+        await OneBot(client=client).kick(
+            group_id, user_id, reject_add_request=reject_add_request
+        )
+
+    async def resume_verify_sessions(self) -> None:
+        """重载/重启后恢复未完成的入群验证并重新武装超时踢人。"""
+        try:
+            await events.resume_verify_sessions(self)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[yenai群管] 恢复入群验证失败：%s", e)
 
     def wake_ok(self, event) -> bool:
         if not self.conf("enabled", True):
@@ -253,11 +270,13 @@ class YenaiGroupAdminPlugin(Star):
     @filter.on_astrbot_loaded()
     async def on_loaded(self):
         self.tasks.ensure_started()
+        await self.resume_verify_sessions()
 
     @filter.on_plugin_loaded()
     async def on_plugin_loaded(self, metadata=None):
-        """插件被加载/热重载时恢复定时任务。"""
+        """插件被加载/热重载时恢复定时任务与未完成的入群验证。"""
         self.tasks.ensure_started()
+        await self.resume_verify_sessions()
 
     async def terminate(self):
         await self.tasks.shutdown()

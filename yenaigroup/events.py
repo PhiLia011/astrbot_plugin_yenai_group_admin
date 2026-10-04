@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from astrbot.api import logger
 
 from .onebot import OneBot, OneBotError
 from .render import reply_plain
 from .utils import extract_message_id
+from .verify import VerifyManager
 
 ADMIN_ROLES = ("owner", "admin")
+
+# 重载/重启后，验证过期超过这个秒数就不再补踢，避免误伤早已正常发言的成员
+RESUME_GRACE_SECONDS = 180.0
 
 
 def _raw(event) -> dict:
@@ -101,6 +106,7 @@ def _on_decrease(plugin, group_id: str, user_id: str) -> None:
     session = plugin.verify.drop(group_id, user_id)
     if session is None:
         return
+    plugin.verify.save()
     for task in (session.task, session.remind_task):
         if task is not None:
             task.cancel()
@@ -207,7 +213,15 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
         config["range_max"],
         kind=config["kind"],
     )
-    logger.info("[yenai群管][入群验证] 答案：%s（群 %s / %s）", session.code, group_id, user_id)
+    session.deadline = VerifyManager.deadline_from_now(config["time"])
+    plugin.verify.save()
+    logger.info(
+        "[yenai群管][入群验证] 答案：%s（群 %s / %s，%s 秒后超时）",
+        session.code,
+        group_id,
+        user_id,
+        config["time"],
+    )
 
     session.task = plugin.spawn(_verify_timeout(plugin, event, group_id, user_id, config["time"]))
     if config["remind"] and config["time"] >= 120:
@@ -237,12 +251,61 @@ async def _verify_timeout(plugin, event, group_id: str, user_id: str, timeout: i
         return
     if plugin.verify.drop(group_id, user_id) is None:
         return
+    plugin.verify.save()
     await plugin.send_group(event, "\n验证超时，移出群聊，请重新申请", at=user_id)
     onebot = OneBot(event)
     try:
         await onebot.kick(group_id, user_id)
     except OneBotError as e:
         logger.warning("[yenai群管][入群验证] 超时踢出失败：%s", e)
+
+
+async def resume_verify_sessions(plugin) -> None:
+    """插件重载/重启后恢复未完成的验证，并重新武装超时踢人。
+
+    之前状态只存在内存里，重载会取消待执行的超时任务，等于默默放过了所有没验证的人。
+    """
+    records = plugin.verify.load()
+    if not records:
+        return
+    now = time.time()
+    resumed = 0
+    for record in records:
+        session = plugin.verify.adopt(record)
+        delay = session.deadline - now
+        if delay < -RESUME_GRACE_SECONDS:
+            # 已经过期太久（比如机器人离线了很久），不再补踢，避免误伤早已正常发言的成员
+            plugin.verify.drop(session.group_id, session.user_id)
+            logger.warning(
+                "[yenai群管][入群验证] 群 %s 成员 %s 的验证已过期 %.0f 秒，放弃补踢",
+                session.group_id,
+                session.user_id,
+                -delay,
+            )
+            continue
+        session.task = plugin.spawn(
+            _verify_timeout_resumed(plugin, session.group_id, session.user_id, max(delay, 0)),
+        )
+        resumed += 1
+    plugin.verify.save()
+    if resumed:
+        logger.info("[yenai群管][入群验证] 已恢复 %s 个未完成的验证", resumed)
+
+
+async def _verify_timeout_resumed(plugin, group_id: str, user_id: str, delay: float) -> None:
+    """重载后恢复的超时任务：没有原始事件，只能直接踢人。"""
+    try:
+        await asyncio.sleep(max(0.0, delay))
+    except asyncio.CancelledError:
+        return
+    if plugin.verify.drop(group_id, user_id) is None:
+        return
+    plugin.verify.save()
+    try:
+        await plugin.kick_member(group_id, user_id)
+        logger.info("[yenai群管][入群验证] 超时补踢 %s（群 %s）", user_id, group_id)
+    except OneBotError as e:
+        logger.warning("[yenai群管][入群验证] 超时补踢失败：%s", e)
 
 
 async def _verify_remind(plugin, event, group_id: str, user_id: str, timeout: int) -> None:
@@ -282,6 +345,7 @@ async def handle_verify_answer(plugin, event) -> bool:
         return False
     if ok:
         plugin.verify.drop(group_id, sender_id)
+        plugin.verify.save()
         for task in (session.task, session.remind_task):
             if task is not None:
                 task.cancel()
@@ -290,6 +354,7 @@ async def handle_verify_answer(plugin, event) -> bool:
 
     remain = plugin.verify.consume_failure(group_id, sender_id)
     if remain > 0:
+        plugin.verify.save()
         onebot = OneBot(event)
         message_id = extract_message_id(event)
         if message_id:
@@ -309,6 +374,7 @@ async def handle_verify_answer(plugin, event) -> bool:
         return True
 
     plugin.verify.drop(group_id, sender_id)
+    plugin.verify.save()
     for task in (session.task, session.remind_task):
         if task is not None:
             task.cancel()
