@@ -50,7 +50,7 @@ HELP_TEXT = """椰奶群管 · 指令一览（全局触发词 -）
 -启用投票禁言 / -禁用投票踢人 / -投票设置超时时间 180
 
 【入群验证】
--开启验证 / -关闭验证 / -切换验证模式 / -切换验证类型 / -设置验证超时时间 300
+-开启验证 / -关闭验证 / -验证状态 / -切换验证模式 / -切换验证类型 / -设置验证超时时间 300
 -重新验证 @某人 / -绕过验证 @某人 / -重新验证从未发言的人
 
 【群公告与通知】
@@ -390,6 +390,45 @@ async def cmd_verify_type(plugin, event):
         await reply_plain(event, "✅ 已切换验证类型为算式验证")
 
 
+async def cmd_verify_status(plugin, event):
+    """查看本群入群验证的当前生效配置（只读，不会创建群配置文件）。"""
+    if not await plugin.perm.check(event, "admin", "all"):
+        return
+    group_id = str(event.get_group_id() or "")
+    configured = plugin.store.exists(group_id)
+    data = plugin.store.get(group_id) if configured else {}
+
+    enabled = (
+        bool(data.get("verifyEnabled"))
+        if configured
+        else bool(plugin.conf("verify_enabled_default", False))
+    )
+    if configured:
+        enabled_from = "本群设置"
+    else:
+        enabled_from = "全局默认 verify_enabled_default（本群还没有配置文件）"
+    kind = (data.get("verifyType") or "") if configured else ""
+    kind = kind or plugin.conf("verify_type", "算式")
+    mode = (data.get("verifyMode") or "") if configured else ""
+    mode = mode or plugin.conf("verify_mode", "精确")
+    timeout = int(((data.get("verifyTime") or 0) if configured else 0) or plugin.conf("verify_time", 300))
+
+    lines = [
+        "【本群入群验证状态】",
+        f"验证开关：{'✅ 已开启' if enabled else '❌ 未开启'}（来源：{enabled_from}）",
+        f"题目类型：{kind}",
+        f"匹配模式：{mode}",
+        f"超时时长：{timeout} 秒",
+        f"最多尝试：{int(plugin.conf('verify_times', 3))} 次",
+    ]
+    if not enabled:
+        lines.append("")
+        lines.append("提示：入群验证是按群开启的，发送「-开启验证」即可在本群启用。")
+        if not configured:
+            lines.append("本群目前还没有配置文件，开启后会生成。")
+    await reply_plain(event, "\n".join(lines))
+
+
 async def cmd_verify_time(plugin, event):
     if not await plugin.perm.check(event, "master"):
         return
@@ -413,7 +452,11 @@ async def cmd_verify_again(plugin, event):
 
     group_id, data = _group_of(event, plugin)
     if not data.get("verifyEnabled"):
-        await reply_plain(event, "当前群未开启验证哦~")
+        await reply_plain(
+            event,
+            "当前群未开启验证哦~\n入群验证是按群开启的：发送「-开启验证」即可启用，"
+            "发送「-验证状态」可查看当前配置",
+        )
         return
     targets = at_targets(event, event.get_self_id())
     if not targets:

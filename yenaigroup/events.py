@@ -79,9 +79,21 @@ async def _on_increase(plugin, event, group_id: str, user_id: str) -> None:
             logger.warning("[yenai群管] 踢出黑名单成员失败：%s", e)
         return
     if not plugin.store.exists(group_id):
-        return
-    data = plugin.store.get(group_id)
-    if not data.get("verifyEnabled"):
+        # 本群还没有配置文件：可以靠全局开关默认开启入群验证，
+        # 否则明确记一条日志，避免「新成员进群后毫无反应」无从排查
+        if bool(plugin.conf("verify_enabled_default", False)):
+            enabled = True
+        else:
+            logger.info(
+                "[yenai群管][入群验证] 群 %s 尚未开启验证，跳过 %s；"
+                "在该群发送「-开启验证」即可启用（-验证状态 可查看当前配置）",
+                group_id,
+                user_id,
+            )
+            return
+    else:
+        enabled = bool(plugin.store.get(group_id).get("verifyEnabled"))
+    if not enabled:
         return
     if plugin.perm.is_master(user_id) or plugin.perm.is_white(user_id):
         return

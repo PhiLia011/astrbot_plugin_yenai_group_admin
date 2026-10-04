@@ -32,7 +32,7 @@ from .yenaigroup.vote import VoteManager
 PLUGIN_NAME = "astrbot_plugin_yenai_group_admin"
 AUTHOR = "Firefly"
 DESC = "椰奶群管：禁言/踢人/违禁词/黑白名单/投票/入群验证/群公告/定时禁言等全套群管功能"
-VERSION = "v1.1.1"
+VERSION = "v1.1.2"
 REPO = "https://github.com/PhiLia011/astrbot_plugin_yenai_group_admin"
 
 PENDING_TTL = 180
@@ -600,6 +600,15 @@ class YenaiGroupAdminPlugin(Star):
         if not self.wake_ok(event):
             return
         await extra.cmd_verify_toggle(self, event)
+
+    @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
+    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
+    @filter.regex(r"^验证状态")
+    async def cmd_verify_status(self, event: AstrMessageEvent):
+        """查看本群入群验证当前配置。"""
+        if not self.wake_ok(event):
+            return
+        await extra.cmd_verify_status(self, event)
 
     @filter.platform_adapter_type(filter.PlatformAdapterType.AIOCQHTTP)
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)

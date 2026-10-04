@@ -94,6 +94,12 @@
     "type": "bool",
     "default": false
   },
+  "verify_enabled_default": {
+    "description": "未配置过的群默认开启入群验证",
+    "type": "bool",
+    "default": false,
+    "hint": "入群验证是按群开关的：没有配置文件的新群默认不开验证，新成员进群不会有任何验证动作。打开该项后，未配置过的群也会按下面的类型/模式发起验证；已有每群设置优先级更高。也可在群里用「-开启验证」单独启用，用「-验证状态」查看"
+  },
   "verify_type": {
     "description": "验证题目类型",
     "type": "string",

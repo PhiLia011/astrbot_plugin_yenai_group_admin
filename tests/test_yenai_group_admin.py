@@ -12,6 +12,7 @@ AstrBot 的 app 目录也可以用环境变量 ASTRBOT_APP_PATH 指定，免去�
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import tempfile
@@ -291,6 +292,146 @@ def test_verify_range_normalized():
     session = manager.create("1", "2", 1, 100, 10)  # 范围写反也要能用
     assert 10 <= session.m <= 100
     assert 10 <= session.n <= 100
+
+
+# ---------------- 入群验证的“是否触发”门槛 ----------------
+# 这一条是真实踩过的坑：验证按群开关，没有配置文件的群默认直接跳过，
+# 表现就是「新成员进群毫无反应」，很容易被误判成验证码模式坏了。
+
+class _FakeStore:
+    def __init__(self, enabled_groups):
+        self._enabled = set(enabled_groups)
+
+    def exists(self, group_id):
+        return str(group_id) in self._enabled
+
+    def get(self, group_id):
+        return {"verifyEnabled": str(group_id) in self._enabled}
+
+
+class _FakePerm:
+    def is_black(self, user_id):
+        return False
+
+    def is_master(self, user_id):
+        return False
+
+    def is_white(self, user_id):
+        return False
+
+
+class _FakeManageOneBot:
+    """只用到 send_private 的假 OneBot。"""
+
+    sent = []
+
+    def __init__(self, event):
+        pass
+
+    async def send_private(self, user_id, message, group_id=None):
+        _FakeManageOneBot.sent.append((user_id, group_id, message))
+
+
+class _FakeVerifyPlugin:
+    def __init__(self, config, enabled_groups):
+        self.config = config
+        self.store = _FakeStore(enabled_groups)
+        self.perm = _FakePerm()
+        self.verify = VerifyManager()
+        self.group_msgs = []
+        self.tasks = []
+
+    def conf(self, key, default=None):
+        value = self.config.get(key, default)
+        return default if value is None else value
+
+    def spawn(self, coro):
+        task = asyncio.ensure_future(coro)
+        self.tasks.append(task)
+        return task
+
+    async def send_group(self, event, text, at=None):
+        self.group_msgs.append(text)
+
+
+class _FakeIncreaseEvent:
+    def get_self_id(self):
+        return "999"
+
+
+def test_verify_not_triggered_without_group_config():
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    async def run():
+        original = events.OneBot
+        events.OneBot = _FakeManageOneBot
+        _FakeManageOneBot.sent = []
+        try:
+            plugin = _FakeVerifyPlugin(
+                {"verify_type": "字母验证码", "verify_delay": 0},
+                enabled_groups=[],
+            )
+            event = _FakeIncreaseEvent()
+            await events._on_increase(plugin, event, "658389645", "10001")
+            assert plugin.verify.find("658389645", "10001") is None
+            assert plugin.group_msgs == []
+            assert _FakeManageOneBot.sent == []
+        finally:
+            events.OneBot = original
+
+    asyncio.run(run())
+
+
+def test_verify_triggered_when_group_enabled():
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    async def run():
+        original = events.OneBot
+        events.OneBot = _FakeManageOneBot
+        _FakeManageOneBot.sent = []
+        try:
+            plugin = _FakeVerifyPlugin(
+                {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 300},
+                enabled_groups=["658389645"],
+            )
+            event = _FakeIncreaseEvent()
+            await events._on_increase(plugin, event, "658389645", "10001")
+            session = plugin.verify.find("658389645", "10001")
+            assert session is not None and session.kind == "letter"
+            # 验证码必须私聊下发，且不能出现在群消息里
+            assert _FakeManageOneBot.sent
+            assert session.code in _FakeManageOneBot.sent[-1][2]
+            assert all(session.code not in msg for msg in plugin.group_msgs)
+            for task in plugin.tasks:
+                task.cancel()
+        finally:
+            events.OneBot = original
+
+    asyncio.run(run())
+
+
+def test_verify_enabled_default_covers_unconfigured_groups():
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    async def run():
+        original = events.OneBot
+        events.OneBot = _FakeManageOneBot
+        _FakeManageOneBot.sent = []
+        try:
+            plugin = _FakeVerifyPlugin(
+                {"verify_type": "字母验证码", "verify_delay": 0, "verify_enabled_default": True},
+                enabled_groups=[],
+            )
+            event = _FakeIncreaseEvent()
+            await events._on_increase(plugin, event, "658389645", "10001")
+            session = plugin.verify.find("658389645", "10001")
+            assert session is not None and session.kind == "letter"
+            for task in plugin.tasks:
+                task.cancel()
+        finally:
+            events.OneBot = original
+
+    asyncio.run(run())
 
 
 def test_verify_letter_code_charset():
