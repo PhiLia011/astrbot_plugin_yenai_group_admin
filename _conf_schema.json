@@ -95,10 +95,16 @@
     "default": false
   },
   "verify_enabled_default": {
-    "description": "未配置过的群默认开启入群验证",
+    "description": "入群验证默认开启（黑名单模式）",
     "type": "bool",
-    "default": false,
-    "hint": "入群验证是按群开关的：没有配置文件的新群默认不开验证，新成员进群不会有任何验证动作。打开该项后，未配置过的群也会按下面的类型/模式发起验证；已有每群设置优先级更高。也可在群里用「-开启验证」单独启用，用「-验证状态」查看"
+    "default": true,
+    "hint": "默认开启：不在下面 verify_group_black_list 里的群，新成员进群都会发起入群验证，未通过会被移出。要按群关闭可在群里发「-关闭验证」，要整批排除就填下面的黑名单；想全局关闭把这个开关关掉即可"
+  },
+  "verify_group_black_list": {
+    "description": "不做入群验证的群（黑名单）",
+    "type": "list",
+    "default": [],
+    "hint": "这里的群永不发起入群验证（优先级最高，高于每群开关与上面的默认开启）。注意和其它功能无关，只影响入群验证"
   },
   "verify_type": {
     "description": "验证题目类型",

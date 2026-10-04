@@ -295,18 +295,19 @@ def test_verify_range_normalized():
 
 
 # ---------------- 入群验证的“是否触发”门槛 ----------------
-# 这一条是真实踩过的坑：验证按群开关，没有配置文件的群默认直接跳过，
-# 表现就是「新成员进群毫无反应」，很容易被误判成验证码模式坏了。
+# 真实踩过的坑：验证原本按群默认关闭，没配置过的群新成员进群毫无反应，
+# 很容易被误判成字母验证码模式坏了。现在是「默认全开 + 黑名单排除」。
 
 class _FakeStore:
-    def __init__(self, enabled_groups):
-        self._enabled = set(enabled_groups)
+    def __init__(self, groups):
+        # groups: {群号: 群配置字典}；不在字典里 = 没有配置文件
+        self._groups = {str(k): dict(v) for k, v in groups.items()}
 
     def exists(self, group_id):
-        return str(group_id) in self._enabled
+        return str(group_id) in self._groups
 
     def get(self, group_id):
-        return {"verifyEnabled": str(group_id) in self._enabled}
+        return self._groups.setdefault(str(group_id), {})
 
 
 class _FakePerm:
@@ -333,9 +334,9 @@ class _FakeManageOneBot:
 
 
 class _FakeVerifyPlugin:
-    def __init__(self, config, enabled_groups):
+    def __init__(self, config, groups=None):
         self.config = config
-        self.store = _FakeStore(enabled_groups)
+        self.store = _FakeStore(groups or {})
         self.perm = _FakePerm()
         self.verify = VerifyManager()
         self.group_msgs = []
@@ -359,7 +360,8 @@ class _FakeIncreaseEvent:
         return "999"
 
 
-def test_verify_not_triggered_without_group_config():
+def _run_increase(plugin, group_id="658389645", user_id="10001"):
+    """跑一次入群处理，返回是否真的发起了验证。"""
     from astrbot_plugin_yenai_group_admin.yenaigroup import events
 
     async def run():
@@ -367,71 +369,79 @@ def test_verify_not_triggered_without_group_config():
         events.OneBot = _FakeManageOneBot
         _FakeManageOneBot.sent = []
         try:
-            plugin = _FakeVerifyPlugin(
-                {"verify_type": "字母验证码", "verify_delay": 0},
-                enabled_groups=[],
-            )
-            event = _FakeIncreaseEvent()
-            await events._on_increase(plugin, event, "658389645", "10001")
-            assert plugin.verify.find("658389645", "10001") is None
-            assert plugin.group_msgs == []
-            assert _FakeManageOneBot.sent == []
+            await events._on_increase(plugin, _FakeIncreaseEvent(), group_id, user_id)
+            session = plugin.verify.find(group_id, user_id)
+            return session, list(_FakeManageOneBot.sent), list(plugin.group_msgs)
         finally:
             events.OneBot = original
-
-    asyncio.run(run())
-
-
-def test_verify_triggered_when_group_enabled():
-    from astrbot_plugin_yenai_group_admin.yenaigroup import events
-
-    async def run():
-        original = events.OneBot
-        events.OneBot = _FakeManageOneBot
-        _FakeManageOneBot.sent = []
-        try:
-            plugin = _FakeVerifyPlugin(
-                {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 300},
-                enabled_groups=["658389645"],
-            )
-            event = _FakeIncreaseEvent()
-            await events._on_increase(plugin, event, "658389645", "10001")
-            session = plugin.verify.find("658389645", "10001")
-            assert session is not None and session.kind == "letter"
-            # 验证码必须私聊下发，且不能出现在群消息里
-            assert _FakeManageOneBot.sent
-            assert session.code in _FakeManageOneBot.sent[-1][2]
-            assert all(session.code not in msg for msg in plugin.group_msgs)
             for task in plugin.tasks:
                 task.cancel()
-        finally:
-            events.OneBot = original
 
-    asyncio.run(run())
+    return asyncio.run(run())
 
 
-def test_verify_enabled_default_covers_unconfigured_groups():
-    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+def test_verify_default_on_for_unconfigured_group():
+    """默认全开：没有配置文件的群也要验证（这正是之前的坑）。"""
+    plugin = _FakeVerifyPlugin(
+        {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 300},
+    )
+    session, private, group_msgs = _run_increase(plugin)
+    assert session is not None and session.kind == "letter"
+    # 验证码必须私聊下发，且不能出现在群消息里
+    assert private and session.code in private[-1][2]
+    assert all(session.code not in msg for msg in group_msgs)
 
-    async def run():
-        original = events.OneBot
-        events.OneBot = _FakeManageOneBot
-        _FakeManageOneBot.sent = []
-        try:
-            plugin = _FakeVerifyPlugin(
-                {"verify_type": "字母验证码", "verify_delay": 0, "verify_enabled_default": True},
-                enabled_groups=[],
-            )
-            event = _FakeIncreaseEvent()
-            await events._on_increase(plugin, event, "658389645", "10001")
-            session = plugin.verify.find("658389645", "10001")
-            assert session is not None and session.kind == "letter"
-            for task in plugin.tasks:
-                task.cancel()
-        finally:
-            events.OneBot = original
 
-    asyncio.run(run())
+def test_verify_group_black_list_excludes_group():
+    """黑名单里的群永不验证（优先级最高）。"""
+    plugin = _FakeVerifyPlugin(
+        {
+            "verify_type": "字母验证码",
+            "verify_delay": 0,
+            "verify_group_black_list": ["658389645"],
+        },
+    )
+    session, private, group_msgs = _run_increase(plugin)
+    assert session is None
+    assert private == [] and group_msgs == []
+
+
+def test_verify_per_group_opt_out():
+    """-关闭验证 写入 verifyDisabled 后，该群不再验证。"""
+    plugin = _FakeVerifyPlugin(
+        {"verify_type": "字母验证码", "verify_delay": 0},
+        groups={"658389645": {"verifyDisabled": True, "verifyEnabled": False}},
+    )
+    session, private, group_msgs = _run_increase(plugin)
+    assert session is None
+    assert private == [] and group_msgs == []
+
+
+def test_verify_global_switch_can_turn_everything_off():
+    plugin = _FakeVerifyPlugin(
+        {
+            "verify_type": "字母验证码",
+            "verify_delay": 0,
+            "verify_enabled_default": False,
+        },
+    )
+    session, private, group_msgs = _run_increase(plugin)
+    assert session is None
+    assert private == [] and group_msgs == []
+
+
+def test_verify_enabled_reports_reason():
+    from astrbot_plugin_yenai_group_admin.yenaigroup.events import verify_enabled
+
+    plugin = _FakeVerifyPlugin(
+        {"verify_group_black_list": ["111"], "verify_enabled_default": True},
+        groups={"222": {"verifyDisabled": True}, "333": {"verifyDisabled": False}},
+    )
+    assert verify_enabled(plugin, "111")[0] is False
+    assert "黑名单" in verify_enabled(plugin, "111")[1]
+    assert verify_enabled(plugin, "222")[0] is False
+    assert verify_enabled(plugin, "333")[0] is True
+    assert verify_enabled(plugin, "444")[0] is True  # 没有配置文件 -> 跟随默认
 
 
 def test_verify_letter_code_charset():

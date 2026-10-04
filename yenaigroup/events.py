@@ -78,22 +78,16 @@ async def _on_increase(plugin, event, group_id: str, user_id: str) -> None:
         except OneBotError as e:
             logger.warning("[yenai群管] 踢出黑名单成员失败：%s", e)
         return
-    if not plugin.store.exists(group_id):
-        # 本群还没有配置文件：可以靠全局开关默认开启入群验证，
-        # 否则明确记一条日志，避免「新成员进群后毫无反应」无从排查
-        if bool(plugin.conf("verify_enabled_default", False)):
-            enabled = True
-        else:
-            logger.info(
-                "[yenai群管][入群验证] 群 %s 尚未开启验证，跳过 %s；"
-                "在该群发送「-开启验证」即可启用（-验证状态 可查看当前配置）",
-                group_id,
-                user_id,
-            )
-            return
-    else:
-        enabled = bool(plugin.store.get(group_id).get("verifyEnabled"))
+    enabled, reason = verify_enabled(plugin, group_id)
     if not enabled:
+        # 明确记一条日志，避免「新成员进群后毫无反应」无从排查
+        logger.info(
+            "[yenai群管][入群验证] 群 %s 未开启验证（%s），跳过 %s；"
+            "在该群发送「-开启验证」可启用，或从 verify_group_black_list 中移除（-验证状态 可查看）",
+            group_id,
+            reason,
+            user_id,
+        )
         return
     if plugin.perm.is_master(user_id) or plugin.perm.is_white(user_id):
         return
@@ -173,6 +167,34 @@ def verify_type(plugin, group_id: str) -> str:
     """验证题目类型：优先取本群设置，其次取全局配置。"""
     data = plugin.store.get(group_id)
     return data.get("verifyType") or plugin.conf("verify_type", "算式")
+
+
+def verify_group_black_list(plugin) -> set[str]:
+    """不做入群验证的群号集合。"""
+    raw = plugin.conf("verify_group_black_list", []) or []
+    return {str(g).strip() for g in raw if str(g).strip()}
+
+
+def verify_enabled(plugin, group_id: str) -> tuple[bool, str]:
+    """本群是否开启入群验证，返回 (是否开启, 判定来源)。
+
+    优先级：群黑名单 > 本群显式开关 > 全局默认。
+    默认是「不在黑名单里的群全部开启」，可用「-关闭验证」按群关掉。
+    """
+    group_id = str(group_id)
+    if group_id in verify_group_black_list(plugin):
+        return False, "群在 verify_group_black_list 黑名单中"
+    if plugin.store.exists(group_id):
+        data = plugin.store.get(group_id)
+        explicit = data.get("verifyDisabled")
+        if explicit is not None:
+            return (not bool(explicit)), "本群设置（-开启验证 / -关闭验证）"
+        if data.get("verifyEnabled") is True:
+            # 兼容旧版本留下的显式开启
+            return True, "本群设置"
+    default_on = bool(plugin.conf("verify_enabled_default", True))
+    source = "全局默认 verify_enabled_default" + ("" if default_on else "（已关闭）")
+    return default_on, source
 
 
 async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
