@@ -473,14 +473,17 @@ def test_verify_letter_needs_no_private_channel():
 
 
 def test_verify_letter_group_answer_accepted():
-    """字母码发在群里，用户照抄回复（大小写不敏感）即通过。"""
-    from astrbot_plugin_yenai_group_admin.yenaigroup import events
-
+    """字母码发在群里，用户照抄回复即通过；大小写必须一致。"""
     manager = VerifyManager()
     session = manager.create("658389645", "10001", 3, 10, 20, kind="letter")
-    assert manager.check("658389645", "10001", session.code.upper(), "精确")[0] is True
-    assert manager.check("658389645", "10001", session.code.lower(), "模糊")[0] is True
+    assert manager.check("658389645", "10001", session.code, "精确")[0] is True
+    assert manager.check("658389645", "10001", f" {session.code} ", "精确")[0] is True
     assert manager.check("658389645", "10001", "无效内容", "精确")[0] is False
+    # 只要改动了大小写就算答错
+    if session.code != session.code.upper():
+        assert manager.check("658389645", "10001", session.code.upper(), "精确")[0] is False
+    if session.code != session.code.lower():
+        assert manager.check("658389645", "10001", session.code.lower(), "精确")[0] is False
 
 
 def test_verify_letter_code_charset():
@@ -499,16 +502,28 @@ def test_verify_letter_code_matching():
     session = manager.create("1", "2", 3, 10, 20, kind="letter")
     assert session.kind == "letter"
     assert session.question == session.code
-    # 字母验证码不区分大小写（用户输入法容易自动大写）
+    # 字母验证码区分大小写：必须与群里给出的完全一致
     assert manager.check("1", "2", session.code, "精确")[0] is True
-    assert manager.check("1", "2", session.code.upper(), "精确")[0] is True
-    assert manager.check("1", "2", session.code.lower(), "精确")[0] is True
     assert manager.check("1", "2", f" {session.code} ", "精确")[0] is True
     assert manager.check("1", "2", f"答案是{session.code}吧", "精确")[0] is False
-    assert manager.check("1", "2", f"答案是{session.code.upper()}吧", "模糊")[0] is True
+    assert manager.check("1", "2", f"答案是{session.code}吧", "模糊")[0] is True
     assert manager.check("1", "2", "AB", "精确")[0] is False
+    if session.code != session.code.upper():
+        assert manager.check("1", "2", session.code.upper(), "精确")[0] is False
+    if session.code != session.code.lower():
+        assert manager.check("1", "2", session.code.lower(), "精确")[0] is False
     assert manager.drop("1", "2") is session
     assert manager.find("1", "2") is None
+
+
+def test_verify_answer_strips_brackets_and_quotes():
+    """把群里提示的「」一起复制过来也能识别（精确模式）。"""
+    manager = VerifyManager()
+    session = manager.create("1", "2", 3, 10, 20, kind="letter")
+    assert manager.check("1", "2", f"「{session.code}」", "精确")[0] is True
+    assert manager.check("1", "2", f"“{session.code}”", "精确")[0] is True
+    math_session = manager.create("3", "4", 3, 10, 20)
+    assert manager.check("3", "4", f"「{math_session.code}」", "精确")[0] is True
 
 
 def test_verify_math_kind_unchanged():

@@ -92,11 +92,10 @@ class VerifyManager:
         if session is None:
             return False, None
         text = (message or "").strip()
+        # 群提示会把答案放在「」里，用户整段复制过来时也要能识别
+        text = text.strip("「」『』“”\"'")
+        # 字母验证码区分大小写，必须和群里给出的完全一致
         target = session.code
-        if session.kind == "letter":
-            # 字母验证码不区分大小写：输入法容易自动首字母大写，
-            # 严格区分大小写会白白消耗用户的失败次数
-            text, target = text.lower(), target.lower()
         if mode == "精确":
             ok = text == target
         else:

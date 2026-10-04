@@ -32,7 +32,7 @@ from .yenaigroup.vote import VoteManager
 PLUGIN_NAME = "astrbot_plugin_yenai_group_admin"
 AUTHOR = "Firefly"
 DESC = "椰奶群管：禁言/踢人/违禁词/黑白名单/投票/入群验证/群公告/定时禁言等全套群管功能"
-VERSION = "v1.2.2"
+VERSION = "v1.2.3"
 REPO = "https://github.com/PhiLia011/astrbot_plugin_yenai_group_admin"
 
 PENDING_TTL = 180

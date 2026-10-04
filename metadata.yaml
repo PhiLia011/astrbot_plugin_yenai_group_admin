@@ -1,7 +1,7 @@
 name: astrbot_plugin_yenai_group_admin
 display_name: 椰奶群管
 desc: 复刻 Yunzai 椰奶群管插件的 AstrBot 群管插件：禁言/解禁（自定义时长）/踢人/踢黑/设置管理/头衔/禁言列表/违禁词/黑白名单/投票/入群验证/群公告/定时禁言等，命令统一使用全局触发词 “-”。
-version: v1.2.2
+version: v1.2.3
 author: Firefly
 astrbot_version: ">=4.24.2"
 support_platforms:

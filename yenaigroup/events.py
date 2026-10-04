@@ -218,7 +218,7 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
         await plugin.send_group(
             event,
             f" 欢迎！\n请在「{config['time']}」秒内发送\n"
-            f"「{session.code}」验证码到本群（不区分大小写）\n否则将会被移出群聊",
+            f"「{session.code}」验证码到本群（区分大小写）\n否则将会被移出群聊",
             at=user_id,
         )
     else:
@@ -298,7 +298,7 @@ async def handle_verify_answer(plugin, event) -> bool:
             except OneBotError:
                 pass
         if session.kind == "letter":
-            hint = "请发送上面的验证码（不区分大小写）"
+            hint = "请发送上面的验证码（区分大小写）"
         else:
             hint = f"请发送「{session.question}」的运算结果"
         await plugin.send_group(
