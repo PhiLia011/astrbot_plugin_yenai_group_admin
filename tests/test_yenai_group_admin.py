@@ -444,6 +444,36 @@ def test_verify_enabled_reports_reason():
     assert verify_enabled(plugin, "444")[0] is True  # 没有配置文件 -> 跟随默认
 
 
+def test_verify_letter_falls_back_to_math_when_private_fails():
+    """私聊发不出去时回退算式，并在群消息里说明原因。"""
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+    from astrbot_plugin_yenai_group_admin.yenaigroup.onebot import OneBotError
+
+    class FailingOneBot(_FakeManageOneBot):
+        async def send_private(self, user_id, message, group_id=None):
+            raise OneBotError("发送失败，请先添加对方为好友")
+
+    async def run():
+        original = events.OneBot
+        events.OneBot = FailingOneBot
+        try:
+            plugin = _FakeVerifyPlugin(
+                {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 300},
+            )
+            await events._on_increase(plugin, _FakeIncreaseEvent(), "658389645", "10001")
+            session = plugin.verify.find("658389645", "10001")
+            assert session is not None and session.kind == "math"
+            assert plugin.group_msgs
+            assert "私聊发送失败" in plugin.group_msgs[-1]
+            assert session.question in plugin.group_msgs[-1]
+        finally:
+            events.OneBot = original
+            for task in plugin.tasks:
+                task.cancel()
+
+    asyncio.run(run())
+
+
 def test_verify_letter_code_charset():
     assert LETTER_LENGTH == 5
     # 不算字母 l/I、o/O，避免用户看错

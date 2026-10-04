@@ -201,8 +201,9 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
     config = verify_config(plugin, group_id)
     kind = config["kind"]
     session = None
+    fallback_note = ""
     if kind == "letter":
-        # 字母验证码需要私聊下发，发不出去（非好友被拦截）时回退为算式验证
+        # 字母验证码需要私聊下发，发不出去（非好友被拦截 / 协议端不建临时会话）时回退为算式验证
         probe = plugin.verify.create(
             group_id, user_id, config["times"], config["range_min"], config["range_max"], kind="letter",
         )
@@ -218,10 +219,12 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
             plugin.verify.drop(group_id, user_id)
             logger.warning("[yenai群管][入群验证] 私发验证码失败，回退算式验证：%s", e)
             kind = "math"
+            fallback_note = "（验证码私聊发送失败，已自动改用算式题）\n"
         except Exception as e:  # noqa: BLE001 - 任何意外都不能把用户卡死在验证流程里
             plugin.verify.drop(group_id, user_id)
             logger.warning("[yenai群管][入群验证] 私发验证码异常，回退算式验证：%s", e)
             kind = "math"
+            fallback_note = "（验证码私聊发送失败，已自动改用算式题）\n"
         else:
             session = probe
     if session is None:
@@ -250,7 +253,7 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
     else:
         await plugin.send_group(
             event,
-            f" 欢迎！\n请在「{config['time']}」秒内发送\n"
+            f" 欢迎！\n{fallback_note}请在「{config['time']}」秒内发送\n"
             f"「{session.question}」的运算结果\n否则将会被移出群聊",
             at=user_id,
         )
