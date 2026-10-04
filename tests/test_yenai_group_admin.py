@@ -387,9 +387,9 @@ def test_verify_default_on_for_unconfigured_group():
     )
     session, private, group_msgs = _run_increase(plugin)
     assert session is not None and session.kind == "letter"
-    # 验证码必须私聊下发，且不能出现在群消息里
-    assert private and session.code in private[-1][2]
-    assert all(session.code not in msg for msg in group_msgs)
+    # 字母码直接发在群里，不走私聊
+    assert group_msgs and session.code in group_msgs[-1]
+    assert private == []
 
 
 def test_verify_group_black_list_excludes_group():
@@ -444,34 +444,43 @@ def test_verify_enabled_reports_reason():
     assert verify_enabled(plugin, "444")[0] is True  # 没有配置文件 -> 跟随默认
 
 
-def test_verify_letter_falls_back_to_math_when_private_fails():
-    """私聊发不出去时回退算式，并在群消息里说明原因。"""
+def test_verify_letter_needs_no_private_channel():
+    """字母模式不依赖私聊：协议端完全不能私聊时也要正常发起字母验证。"""
     from astrbot_plugin_yenai_group_admin.yenaigroup import events
     from astrbot_plugin_yenai_group_admin.yenaigroup.onebot import OneBotError
 
-    class FailingOneBot(_FakeManageOneBot):
+    class NoPrivateOneBot(_FakeManageOneBot):
         async def send_private(self, user_id, message, group_id=None):
             raise OneBotError("发送失败，请先添加对方为好友")
 
     async def run():
         original = events.OneBot
-        events.OneBot = FailingOneBot
+        events.OneBot = NoPrivateOneBot
         try:
             plugin = _FakeVerifyPlugin(
                 {"verify_type": "字母验证码", "verify_delay": 0, "verify_time": 300},
             )
             await events._on_increase(plugin, _FakeIncreaseEvent(), "658389645", "10001")
             session = plugin.verify.find("658389645", "10001")
-            assert session is not None and session.kind == "math"
-            assert plugin.group_msgs
-            assert "私聊发送失败" in plugin.group_msgs[-1]
-            assert session.question in plugin.group_msgs[-1]
+            assert session is not None and session.kind == "letter"
+            assert plugin.group_msgs and session.code in plugin.group_msgs[-1]
         finally:
             events.OneBot = original
             for task in plugin.tasks:
                 task.cancel()
 
     asyncio.run(run())
+
+
+def test_verify_letter_group_answer_accepted():
+    """字母码发在群里，用户照抄回复（大小写不敏感）即通过。"""
+    from astrbot_plugin_yenai_group_admin.yenaigroup import events
+
+    manager = VerifyManager()
+    session = manager.create("658389645", "10001", 3, 10, 20, kind="letter")
+    assert manager.check("658389645", "10001", session.code.upper(), "精确")[0] is True
+    assert manager.check("658389645", "10001", session.code.lower(), "模糊")[0] is True
+    assert manager.check("658389645", "10001", "无效内容", "精确")[0] is False
 
 
 def test_verify_letter_code_charset():

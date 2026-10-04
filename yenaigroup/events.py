@@ -199,43 +199,14 @@ def verify_enabled(plugin, group_id: str) -> tuple[bool, str]:
 
 async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
     config = verify_config(plugin, group_id)
-    kind = config["kind"]
-    session = None
-    fallback_note = ""
-    if kind == "letter":
-        # 字母验证码需要私聊下发，发不出去（非好友被拦截 / 协议端不建临时会话）时回退为算式验证
-        probe = plugin.verify.create(
-            group_id, user_id, config["times"], config["range_min"], config["range_max"], kind="letter",
-        )
-        try:
-            # 带上 group_id 走群临时会话，非好友也能送达
-            await OneBot(event).send_private(
-                user_id,
-                f"【入群验证】你的验证码是：{probe.code}\n"
-                f"请在「{config['time']}」秒内将它发送到群里完成验证（不区分大小写）",
-                group_id=group_id,
-            )
-        except OneBotError as e:
-            plugin.verify.drop(group_id, user_id)
-            logger.warning("[yenai群管][入群验证] 私发验证码失败，回退算式验证：%s", e)
-            kind = "math"
-            fallback_note = "（验证码私聊发送失败，已自动改用算式题）\n"
-        except Exception as e:  # noqa: BLE001 - 任何意外都不能把用户卡死在验证流程里
-            plugin.verify.drop(group_id, user_id)
-            logger.warning("[yenai群管][入群验证] 私发验证码异常，回退算式验证：%s", e)
-            kind = "math"
-            fallback_note = "（验证码私聊发送失败，已自动改用算式题）\n"
-        else:
-            session = probe
-    if session is None:
-        session = plugin.verify.create(
-            group_id,
-            user_id,
-            config["times"],
-            config["range_min"],
-            config["range_max"],
-            kind=kind,
-        )
+    session = plugin.verify.create(
+        group_id,
+        user_id,
+        config["times"],
+        config["range_min"],
+        config["range_max"],
+        kind=config["kind"],
+    )
     logger.info("[yenai群管][入群验证] 答案：%s（群 %s / %s）", session.code, group_id, user_id)
 
     session.task = plugin.spawn(_verify_timeout(plugin, event, group_id, user_id, config["time"]))
@@ -246,14 +217,14 @@ async def start_verify(plugin, event, group_id: str, user_id: str) -> None:
     if session.kind == "letter":
         await plugin.send_group(
             event,
-            f" 欢迎！\n验证码已私聊发送给你\n请在「{config['time']}」秒内\n"
-            f"将验证码发到本群（不区分大小写）\n否则将会被移出群聊",
+            f" 欢迎！\n请在「{config['time']}」秒内发送\n"
+            f"「{session.code}」验证码到本群（不区分大小写）\n否则将会被移出群聊",
             at=user_id,
         )
     else:
         await plugin.send_group(
             event,
-            f" 欢迎！\n{fallback_note}请在「{config['time']}」秒内发送\n"
+            f" 欢迎！\n请在「{config['time']}」秒内发送\n"
             f"「{session.question}」的运算结果\n否则将会被移出群聊",
             at=user_id,
         )
@@ -283,7 +254,7 @@ async def _verify_remind(plugin, event, group_id: str, user_id: str, timeout: in
     if session is None:
         return
     if session.kind == "letter":
-        text = " \n验证仅剩最后一分钟\n请发送私聊收到的验证码\n否则将会被移出群聊"
+        text = " \n验证仅剩最后一分钟\n请发送上面的验证码\n否则将会被移出群聊"
     else:
         text = (
             f" \n验证仅剩最后一分钟\n请发送「{session.question}」的运算结果\n否则将会被移出群聊"
@@ -327,7 +298,7 @@ async def handle_verify_answer(plugin, event) -> bool:
             except OneBotError:
                 pass
         if session.kind == "letter":
-            hint = "请发送私聊收到的验证码（不区分大小写）"
+            hint = "请发送上面的验证码（不区分大小写）"
         else:
             hint = f"请发送「{session.question}」的运算结果"
         await plugin.send_group(

@@ -387,7 +387,7 @@ async def cmd_verify_type(plugin, event):
     if value == "字母验证码":
         await reply_plain(
             event,
-            "✅ 已切换验证类型为字母验证码\n验证码将私聊下发，发送失败时自动回退算式验证",
+            "✅ 已切换验证类型为字母验证码\n验证码会直接发在群里，用户照着回复即可（不区分大小写）",
         )
     else:
         await reply_plain(event, "✅ 已切换验证类型为算式验证")
